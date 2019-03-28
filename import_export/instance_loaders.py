@@ -1,3 +1,6 @@
+from django.core.exceptions import ValidationError
+from django.utils.encoding import force_text
+
 class BaseInstanceLoader:
     """
     Base abstract implementation of instance loader.
@@ -22,11 +25,18 @@ class ModelInstanceLoader(BaseInstanceLoader):
         return self.resource.get_queryset()
 
     def get_instance(self, row):
+        errors = {}
         try:
             params = {}
             for key in self.resource.get_import_id_fields():
                 field = self.resource.fields[key]
-                params[field.attribute] = field.clean(row)
+                try:
+                    params[field.attribute] = field.clean(row)
+                except ValueError as e:
+                    errors[field.attribute] = ValidationError(
+                        force_text(e), code="invalid")
+            if errors:
+                raise ValidationError(errors)
             if params:
                 return self.get_queryset().get(**params)
             else:
